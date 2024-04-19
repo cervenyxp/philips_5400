@@ -411,30 +411,30 @@ void PhilipsSeries5400::setup(){
 
 void PhilipsSeries5400::loop() {
 
-    uint32_t _now=millis(); // текущее системное время
-    static uint32_t on_control=_now; // время последней активности обмена данными
-    static uint32_t coffee_ready=1; //время окончания приготовления последнего кофе
-    uint8_t temp; // буфер для считывания байта из порта
+    uint32_t _now=millis(); // aktuální systémový čas
+    static uint32_t on_control=_now; // čas poslední komunikační aktivity
+    static uint32_t coffee_ready=1; //čas ukončení poslední kávy
+    uint8_t temp; // vyrovnávací paměť pro čtení bajtu z portu
     
     { // Pipe display to mainboard
        static uint8_t buffer_board[BUFFER_BOARD_SIZE];
        static uint8_t count_board=0;
        while (display_uart_.available() && display_uart_.read_byte(&temp)){
-           if((count_board>2) || (temp==0xAA /* && count_board>=0 && count_board<=2*/)) { //ждем начало пакета
-              buffer_board[count_board++]=temp; //собираем данные в промежуточный буфер, считаем количество, никуда не отправляем
-              if(count_board>=BUFFER_BOARD_SIZE){ // ограничение переполнения буфера
+           if((count_board>2) || (temp==0xAA /* && count_board>=0 && count_board<=2*/)) { //čekání na spuštění balíčku.
+              buffer_board[count_board++]=temp; //shromažďovat data do mezipaměti, počítat jejich množství, nikam je neposílat.
+              if(count_board>=BUFFER_BOARD_SIZE){ // omezení přetečení vyrovnávací paměti
                  count_board=0;
               }
            } else {
               count_board=0;
            }
-           if(temp==0x55 && count_board>5 && ((buffer_board[5]+11)<=count_board)){ // получили конец пакета - отправляем только полезные данные (отбрасываем 0xAA, CRC и 0x50
-              if((buffer_board[3] & 0xF0)==0x90){ // пакет 9х
+           if(temp==0x55 && count_board>5 && ((buffer_board[5]+11)<=count_board)){ // obdržel konec paketu - pošle pouze užitečná data (zahodí 0xAA, CRC a 0x50).
+              if((buffer_board[3] & 0xF0)==0x90){ // 9x balení
                  send_packet_9X(buffer_board+3, count_board-8);
                  static uint8_t in_counter=0;
-                 if( buffer_board[4]<5){ // первые пакеты не контролим
+                 if( buffer_board[4]<5){ // Prvních několik balíčků nekontrolujeme.
                     in_counter=buffer_board[4];
-                 } else if(in_counter<buffer_board[4]){ // защита от повторов
+                 } else if(in_counter<buffer_board[4]){ // ochrana proti opakování
                     in_counter=buffer_board[4];
                     if(buffer_board[3]==0x90){
                        if(sens_product!=nullptr){coffee_show(buffer_board+6);}  //  текстовая расшифровка рецепта
@@ -601,7 +601,7 @@ void PhilipsSeries5400::loop() {
        sendTimer=_now;
     }
 
-    // контроль необходимости сохранения данных
+    // sledování potřeby uchovávání údajů
     static uint32_t saveTimer=0;
     if(_need_store && _now-saveTimer>1000){
        saveTimer=_now;
