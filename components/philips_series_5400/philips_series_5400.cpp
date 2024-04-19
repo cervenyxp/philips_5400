@@ -7,17 +7,17 @@
 
 //#define NEED_LOG
 
-#define BUFFER_BOARD_SIZE 23 // буфер приема пакета в сторону матери
-#define BUFFER_DISPL_SIZE 40 // буфер приема пакета в сторону дисплея
+#define BUFFER_BOARD_SIZE 23 // vyrovnávací paměť pro příjem paketů směrem k matce
+#define BUFFER_DISPL_SIZE 40 // vyrovnávací paměť pro příjem paketů směrem k displeji
 
-// для рассчета контрольной суммы
+// pro výpočet kontrolního součtu
 #define POLY 0x04c11db7
 
 namespace esphome {
 namespace philips_series_5400 {
 
 
-//Байт 0, Байт 3, Байт 4, Cups_Max
+//Byte 0, Byte 3, Byte 4, Cups_Max
 uint8_t CoffePattern[14][4]={
     {0,1,1,2},//Espresso
     {0,1,2,1},//Coffee to go
@@ -58,11 +58,11 @@ uint8_t BitReverse[] =
 
 // старт рассчета CRC
 inline void PhilipsSeries5400::start_crc(uint8_t val){
-   crc = 0xffffffff; // очищаем буер для следующего рассчета
+   crc = 0xffffffff; // vymazání pro další výpočet
    add_crc(val);
 }
  
-//БЫСТРО добавить байт к рассчету crc
+//FAST pro přidání bajtů do výpočtu crc
 inline void PhilipsSeries5400::add_crc(uint8_t val){
     ((uint8_t*)(&crc))[3] ^= BitReverse[val];
     for (uint8_t j = 0; j < 8; j++) {
@@ -74,7 +74,7 @@ inline void PhilipsSeries5400::add_crc(uint8_t val){
     }
 }
 
-//БЫСТРО закончить рассчет контрольной суммы
+//Rychlé dokončení výpočtu kontrolního součtu
 inline uint32_t PhilipsSeries5400::calc_crc(){ 
     uint32_t t32 = 0;
     ((uint8_t*)(&t32))[0]=BitReverse[((uint8_t*)(&crc))[3]];
@@ -85,7 +85,7 @@ inline uint32_t PhilipsSeries5400::calc_crc(){
     return crc;
 }
 
-// рассчет CRC буфера
+// Výpočet vyrovnávací paměti CRC
 inline uint32_t PhilipsSeries5400::calc_crc(uint8_t* data, uint8_t size){
    start_crc(data[0]);
    for(uint8_t i=1; i<size; i++){
@@ -94,11 +94,11 @@ inline uint32_t PhilipsSeries5400::calc_crc(uint8_t* data, uint8_t size){
    return calc_crc();  
 }
 
-// 30 сивмолов лога
+// 30 sivmolov loga
 char debugBuff[]= "=> 00;00;00;00;00;00;00;00;00;00;00;00;00;00;00;00;00;00;00;00;00;00;00;00;00;00;00;00;00;00;00;00;00;00;00;00;00;00;00;00;   "; 
 #define printBuff (debugBuff+2)
 
-// преобразование полубайта в символ
+// převod půlbajtu na znak
 inline char hex2str(uint8_t b){
     if(b<0x0A){
        return b+'0';
@@ -106,9 +106,9 @@ inline char hex2str(uint8_t b){
     return b+('A'-0x0A);   
 }
 
-// БЫСТРАЯ публикация массива в строку в формате HEX
+// FAST publikování pole na řetězec ve formátu HEX
 void printHexLine(uint8_t* buff, uint8_t size, char del=';'){
-   if(size>40) size=40; // ограничиваем выход за пределы буфера печати 
+   if(size>40) size=40; // omezit překročení tiskové vyrovnávací paměti
    char* bu=printBuff;
    for(uint8_t i=0; i<size; i++){
       *bu++=del;
@@ -118,22 +118,22 @@ void printHexLine(uint8_t* buff, uint8_t size, char del=';'){
    *bu=0;
 }
 
-// печать HEX строки в сенсор
+// tisk řetězce HEX do senzoru
 void PhilipsSeries5400::pubMess(TextSensor *sens,uint8_t* buff, uint8_t size){
    printHexLine(buff, size, ' ');
    sens->publish_state(printBuff);
 }
 
-// БЫСТРАЯ печать HEX строки в debug
+// Tisk řetězce FAST HEX v ladění
 void PhilipsSeries5400::_debugPrintPacket(uint8_t* data, uint8_t size, bool in){
-   // заполняем время пакета
+   // vyplňte čas balíčku
    char timeBuff[11]={0};
    sprintf(timeBuff, "%010u", millis());
-   // формируем преамбулы
-   if (in) { // признак входящего пакета
+   // preambule
+   if (in) { // znamení příchozího paketu
       debugBuff[0]='<';
       debugBuff[1]='=';
-   } else {  // признак исходящего пакета
+   } else {  // značka odchozího paketu
       debugBuff[0]='=';
       debugBuff[1]='>';
    } 
@@ -141,11 +141,11 @@ void PhilipsSeries5400::_debugPrintPacket(uint8_t* data, uint8_t size, bool in){
    ESP_LOGE(timeBuff, debugBuff);
 }
 
-uint8_t receept[]={0x90,1,0x0A,0,0,0,0,0,0,0,0,0,0}; // буфер рецепта
-const uint8_t pmb[]={0xAA,0xAA,0xAA}; // преамбула
-const uint8_t post=0x55; // постамбула
+uint8_t receept[]={0x90,1,0x0A,0,0,0,0,0,0,0,0,0,0}; // vyrovnávací paměť na předpis
+const uint8_t pmb[]={0xAA,0xAA,0xAA}; // preambule
+const uint8_t post=0x55; // postambulatorní
 
-// отправка пакета с рассчетом посторением к чертовой матери
+// odeslání balíčku s výpočtem do pekla.
 void PhilipsSeries5400::send_packet_main(uint8_t* data, uint8_t size){
     uint8_t cs[]={0,0,0,0}; 
     *((uint32_t*)cs)=calc_crc(data,size);
@@ -158,7 +158,7 @@ void PhilipsSeries5400::send_packet_main(uint8_t* data, uint8_t size){
     #endif
 }
 
-// отправка пакета с рассчетом посторением дисплею
+// zaslání balíčku s výpočtem následné orientace displeje
 void PhilipsSeries5400::send_packet_displ(uint8_t* data, uint8_t size){
     uint8_t cs[]={0,0,0,0}; 
     *((uint32_t*)cs)=calc_crc(data,size);
@@ -171,7 +171,7 @@ void PhilipsSeries5400::send_packet_displ(uint8_t* data, uint8_t size){
     #endif
 }
 
-void PhilipsSeries5400::coffee_test_validate(){ // показ построения рецепта в тестовом режиме
+void PhilipsSeries5400::coffee_test_validate(){ // zobrazení konstrukce receptu v testovacím režimu
    if(_debug){
       coffee_build(_product, _grind, _cups, _volume, _milk);
    }
