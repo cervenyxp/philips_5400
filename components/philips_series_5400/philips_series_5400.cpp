@@ -16,6 +16,12 @@
 namespace esphome {
 namespace philips_series_5400 {
 
+volatile bool data_ready_display = false;
+volatile bool data_ready_mainboard = false;
+static uint8_t buffer_display[BUFFER_DISPL_SIZE];
+static uint8_t buffer_mainboard[BUFFER_BOARD_SIZE];
+static uint8_t count_display = 0;
+static uint8_t count_mainboard = 0;
 
 //Byte 0, Byte 3, Byte 4, Cups_Max
 uint8_t CoffePattern[14][4]={
@@ -104,6 +110,26 @@ inline char hex2str(uint8_t b){
        return b+'0';
     }
     return b+('A'-0x0A);   
+}
+
+void IRAM_ATTR handle_display_uart_interrupt() {
+    while (display_uart_.available()) {
+        char ch = display_uart_.read();
+        mainboard_uart_.write(ch); // Přeposílání do mainboard UART
+        buffer_display[count_display++] = ch;
+        if (count_display >= BUFFER_DISPL_SIZE) count_display = 0; // Ochrana proti přetečení
+    }
+    data_ready_display = true;
+}
+
+void IRAM_ATTR handle_mainboard_uart_interrupt() {
+    while (mainboard_uart_.available()) {
+        char ch = mainboard_uart_.read();
+        display_uart_.write(ch); // Přeposílání do display UART
+        buffer_mainboard[count_mainboard++] = ch;
+        if (count_mainboard >= BUFFER_BOARD_SIZE) count_mainboard = 0; // Ochrana proti přetečení
+    }
+    data_ready_mainboard = true;
 }
 
 // FAST publikování pole na řetězec ve formátu HEX
@@ -407,9 +433,39 @@ void PhilipsSeries5400::reStore(){
 
 void PhilipsSeries5400::setup(){
    reStore();
+   attachInterrupt(digitalPinToInterrupt(GPIO16), handle_display_uart_interrupt, CHANGE);
+   attachInterrupt(digitalPinToInterrupt(GPIO14), handle_mainboard_uart_interrupt, CHANGE);
 }
 
 void PhilipsSeries5400::loop() {
+    uint32_t _now = millis(); // aktuální systémový čas
+    static uint32_t on_control = _now; // čas poslední komunikační aktivity
+    static uint32_t coffee_ready = 1; // čas ukončení poslední kávy
+
+    if (data_ready_display) {
+        // Zpracování přijatých dat z display UART
+        process_data(buffer_display, count_display);
+        count_display = 0;
+        data_ready_display = false;
+    }
+
+    if (data_ready_mainboard) {
+        // Zpracování přijatých dat z mainboard UART
+        process_data(buffer_mainboard, count_mainboard);
+        count_mainboard = 0;
+        data_ready_mainboard = false;
+    }
+}
+
+void PhilipsSeries5400::process_data(uint8_t *buffer, size_t length) {
+    // Implementujte logiku zpracování dat zde, podobně jako ve vašem původním kódu
+    for (size_t i = 0; i < length; ++i) {
+        uint8_t temp = buffer[i];
+        // Sem přidejte vaši logiku zpracování podle vašich potřeb
+    }
+}
+
+void PhilipsSeries5400::loopx() {
 
     uint32_t _now=millis(); // aktuální systémový čas
     static uint32_t on_control=_now; // čas poslední komunikační aktivity
